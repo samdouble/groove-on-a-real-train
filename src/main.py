@@ -6,6 +6,7 @@ from uuid import uuid4
 import yaml
 from pydantic import BaseModel, Field
 
+from groove.ffmpeg_runtime import run_ffmpeg
 from groove.operations.add_text import AddTextOperation
 from groove.operations.apply_filter import ApplyFilterOperation
 from groove.operations.concatenate import ConcatenateOperation
@@ -47,13 +48,26 @@ def load_config(path: str) -> Config:
 
 def main() -> None:
     config = load_config(CONFIG_PATH)
+    results_by_id: dict[str, Path] = {}
     for step in config.steps:
         if step.name:
             print(f"\n── Step: {step.name} ──")
         for op in step.operations:
             output_dir = Path(f"tmp/steps.{step.id}/operations.{op.id}")
             output_dir.mkdir(parents=True, exist_ok=True)
-            result = op.run(output_dir=output_dir)
+            if isinstance(op, AddTextOperation):
+                result = run_ffmpeg(op.build_invocation(output_dir=output_dir))
+            elif isinstance(op, ConcatenateOperation):
+                resolved_inputs = op.resolve_input_paths(results_by_id)
+                result = run_ffmpeg(
+                    op.build_invocation(output_dir=output_dir, input_paths=resolved_inputs)
+                )
+            elif isinstance(op, (ApplyFilterOperation, ConvertOperation, CutOperation)):
+                result = run_ffmpeg(op.build_invocation(output_dir=output_dir))
+            else:
+                result = op.run(output_dir=output_dir)
+            results_by_id[op.id] = result
+            print(f"[{op.id}] Done → {result.name}")
             if op.output is not None:
                 dest = Path(op.output)
                 if not dest.is_absolute():

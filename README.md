@@ -45,8 +45,9 @@ docker compose up --build
 - type: "concatenate"
   inputs:
     - "/output/part1.mp4"
-    - "/output/part2.mp4"
+    - { id: "intro-title-card" } # use a previous operation result by id
     - "/output/part3.mp4"
+  mode: "reencode" # default; safer when stream parameters differ
   output: "merged.mp4"
 ```
 

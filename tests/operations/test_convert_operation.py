@@ -2,7 +2,6 @@ from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
-from pytest_mock import MockerFixture
 
 from groove.operations.convert import ConvertOperation
 
@@ -43,71 +42,52 @@ class TestConvertOperationRun:
     def test_raises_when_input_file_missing(self, tmp_path: Path) -> None:
         op = ConvertOperation(type="convert", input="/nonexistent/file.mp4")
         with pytest.raises(FileNotFoundError, match="Input file not found"):
-            op.run(output_dir=tmp_path)
+            op.build_invocation(output_dir=tmp_path)
 
-    def test_run_calls_ffmpeg_with_correct_args(
-        self, mocker: MockerFixture, tmp_path: Path
-    ) -> None:
+    def test_build_invocation_calls_ffmpeg_with_correct_args(self, tmp_path: Path) -> None:
         input_file = tmp_path / "video.mp4"
         input_file.touch()
         output_dir = tmp_path / "out"
         output_dir.mkdir()
 
-        mock_stream = mocker.MagicMock()
-        mock_stream.output.return_value = mock_stream
-        mock_stream.overwrite_output.return_value = mock_stream
-        mocker.patch("groove.operations.convert.ffmpeg.input", return_value=mock_stream)
-
         op = ConvertOperation(type="convert", input=str(input_file))
-        result = op.run(output_dir=output_dir)
+        invocation = op.build_invocation(output_dir=output_dir)
 
-        assert result == output_dir / "video.mp3"
-        mock_stream.output.assert_called_once_with(
+        assert invocation.output_path == output_dir / "video.mp3"
+        assert invocation.command == [
+            "ffmpeg",
+            "-y",
+            "-i",
+            str(input_file),
+            "-vn",
+            "-f",
+            "mp3",
+            "-b:a",
+            "192k",
             str(output_dir / "video.mp3"),
-            format="mp3",
-            **{"b:a": "192k"},
-            vn=None,
-        )
-        mock_stream.overwrite_output.assert_called_once()
-        mock_stream.run.assert_called_once()
+        ]
 
-    def test_output_path_uses_input_stem(
-        self, mocker: MockerFixture, tmp_path: Path
-    ) -> None:
+    def test_output_path_uses_input_stem(self, tmp_path: Path) -> None:
         input_file = tmp_path / "my_song.mp4"
         input_file.touch()
         output_dir = tmp_path / "out"
         output_dir.mkdir()
 
-        mock_stream = mocker.MagicMock()
-        mock_stream.output.return_value = mock_stream
-        mock_stream.overwrite_output.return_value = mock_stream
-        mocker.patch("groove.operations.convert.ffmpeg.input", return_value=mock_stream)
-
         op = ConvertOperation(type="convert", input=str(input_file))
-        op.run(output_dir=output_dir)
+        invocation = op.build_invocation(output_dir=output_dir)
 
-        call_args = mock_stream.output.call_args
-        assert call_args.args[0].endswith("my_song.mp3")
+        assert invocation.command[-1].endswith("my_song.mp3")
 
-    def test_run_uses_name_as_label_when_set(
-        self,
-        mocker: MockerFixture,
-        tmp_path: Path,
-        capsys: pytest.CaptureFixture[str],
+    def test_build_invocation_uses_name_as_label_when_set(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
     ) -> None:
         input_file = tmp_path / "video.mp4"
         input_file.touch()
         output_dir = tmp_path / "out"
         output_dir.mkdir()
 
-        mock_stream = mocker.MagicMock()
-        mock_stream.output.return_value = mock_stream
-        mock_stream.overwrite_output.return_value = mock_stream
-        mocker.patch("groove.operations.convert.ffmpeg.input", return_value=mock_stream)
-
         op = ConvertOperation(type="convert", input=str(input_file), name="My Song", id="test-id")
-        op.run(output_dir=output_dir)
+        op.build_invocation(output_dir=output_dir)
 
         captured = capsys.readouterr()
         assert "My Song" in captured.out

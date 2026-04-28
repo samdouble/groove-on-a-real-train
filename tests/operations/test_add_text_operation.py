@@ -2,7 +2,6 @@ from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
-from pytest_mock import MockerFixture
 
 from groove.operations.add_text import AddTextOperation
 
@@ -95,11 +94,11 @@ class TestAddTextOperationValidation:
         assert op.name is None
 
 
-class TestAddTextOperationRun:
+class TestAddTextOperationBuildInvocation:
     def test_raises_when_input_missing(self, tmp_path: Path) -> None:
         op = _make_op(tmp_path, input="/nonexistent/in.mp4")
         with pytest.raises(FileNotFoundError, match="Input file not found"):
-            op.run(tmp_path / "out")
+            op.build_invocation(tmp_path / "out")
 
     def test_raises_when_font_missing(self, tmp_path: Path) -> None:
         v = tmp_path / "v.mp4"
@@ -115,12 +114,11 @@ class TestAddTextOperationRun:
             end=1.0,
         )
         with pytest.raises(FileNotFoundError, match="Font file not found"):
-            op.run(tmp_path / "out")
+            op.build_invocation(tmp_path / "out")
 
-    def test_run_ffmpeg(
-        self, mocker: MockerFixture, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    def test_build_invocation_ffmpeg(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
     ) -> None:
-        m_run = mocker.patch("groove.operations.add_text.subprocess.run")
         v = tmp_path / "v.mp4"
         v.touch()
         out = tmp_path / "step_out"
@@ -128,9 +126,8 @@ class TestAddTextOperationRun:
         op = _make_op(
             tmp_path, input=str(v), name="Clip", x="(w-text_w)/2", y="h*0.8", id="id1"
         )
-        result = op.run(output_dir=out)
-        m_run.assert_called_once()
-        call = m_run.call_args[0][0]
+        invocation = op.build_invocation(output_dir=out)
+        call = invocation.command
         assert call[0] == "ffmpeg"
         assert "-vf" in call
         vf = call[call.index("-vf") + 1]
@@ -143,23 +140,32 @@ class TestAddTextOperationRun:
         assert "x=(w-text_w)/2" in vf
         assert "y=h*0.8" in vf
         assert "alpha=" not in vf
-        assert result == out / "v_addtext.mp4"
+        assert invocation.output_path == out / "v_addtext.mp4"
         captured = capsys.readouterr()
         assert "Clip" in captured.out
         assert "Hi" in captured.out
 
-    def test_run_ffmpeg_with_fade_adds_alpha(
-        self, mocker: MockerFixture, tmp_path: Path
-    ) -> None:
-        m_run = mocker.patch("groove.operations.add_text.subprocess.run")
+    def test_build_invocation_with_fade_adds_alpha(self, tmp_path: Path) -> None:
         v = tmp_path / "v.mp4"
         v.touch()
         out = tmp_path / "step_out"
         out.mkdir()
         op = _make_op(tmp_path, input=str(v), fade_in=0.5, fade_out=0.75)
-        op.run(output_dir=out)
-
-        call = m_run.call_args[0][0]
+        invocation = op.build_invocation(output_dir=out)
+        call = invocation.command
         vf = call[call.index("-vf") + 1]
         assert "alpha=" in vf
         assert "enable=between(t\\,1.0\\,3.0)" in vf
+
+    def test_build_invocation_uses_builder_output(self, tmp_path: Path) -> None:
+        v = tmp_path / "v.mp4"
+        v.touch()
+        out = tmp_path / "step_out"
+        out.mkdir()
+        op = _make_op(tmp_path, input=str(v), id="bld-id")
+
+        invocation = op.build_invocation(output_dir=out)
+
+        assert invocation.command[0] == "ffmpeg"
+        assert invocation.output_path == out / "v_addtext.mp4"
+        assert invocation.cleanup_paths == [out / "bld-id.txt"]

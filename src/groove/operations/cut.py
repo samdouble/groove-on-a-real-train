@@ -2,8 +2,9 @@ from pathlib import Path
 from typing import Annotated, Literal
 from uuid import uuid4
 
-import ffmpeg
 from pydantic import BaseModel, Field, field_validator, model_validator
+
+from groove.ffmpeg_runtime import FFmpegInvocation
 
 
 def _parse_timestamp(value: str) -> float:
@@ -43,7 +44,7 @@ class CutOperation(BaseModel):
             raise ValueError(f"end ({self.end}) must be after start ({self.start})")
         return self
 
-    def run(self, output_dir: Path) -> Path:
+    def build_invocation(self, output_dir: Path) -> FFmpegInvocation:
         input_path = Path(self.input)
         if not input_path.exists():
             raise FileNotFoundError(f"Input file not found: {input_path}")
@@ -55,11 +56,19 @@ class CutOperation(BaseModel):
         output_path = output_dir / f"{input_path.stem}_cut{input_path.suffix}"
         label = self.name or input_path.name
         print(f"[{self.id}] Cutting: {label} [{self.start} → {self.end}]")
-        (
-            ffmpeg.input(str(input_path), ss=start_s, t=duration)
-            .output(str(output_path), c="copy")
-            .overwrite_output()
-            .run()
+        return FFmpegInvocation(
+            command=[
+                "ffmpeg",
+                "-y",
+                "-ss",
+                str(start_s),
+                "-t",
+                str(duration),
+                "-i",
+                str(input_path),
+                "-c",
+                "copy",
+                str(output_path),
+            ],
+            output_path=output_path,
         )
-        print(f"[{self.id}] Done → {output_path.name}")
-        return output_path

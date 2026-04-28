@@ -1,9 +1,10 @@
-import subprocess
 from pathlib import Path
 from typing import Literal
 from uuid import uuid4
 
 from pydantic import BaseModel, Field
+
+from groove.ffmpeg_runtime import FFmpegInvocation
 
 FILTERS_DIR = Path("/app/src/groove/filters")
 
@@ -17,7 +18,7 @@ class ApplyFilterOperation(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid4()))
     output: str | None = None
 
-    def run(self, output_dir: Path) -> Path:
+    def build_invocation(self, output_dir: Path) -> FFmpegInvocation:
         input_path = Path(self.input)
         if not input_path.exists():
             raise FileNotFoundError(f"Input file not found: {input_path}")
@@ -28,12 +29,9 @@ class ApplyFilterOperation(BaseModel):
 
         match self.filter:
             case "gta5wasted":
-                self._apply_gta5wasted(input_path, output_path)
+                return self._build_gta5wasted_invocation(input_path, output_path)
 
-        print(f"[{self.id}] Done → {output_path.name}")
-        return output_path
-
-    def _apply_gta5wasted(self, input_path: Path, output_path: Path) -> None:
+    def _build_gta5wasted_invocation(self, input_path: Path, output_path: Path) -> FFmpegInvocation:
         t1 = self.timestamp
         t2 = t1 + 3.0
         gta_offset = t1 + 3.0
@@ -65,16 +63,23 @@ class ApplyFilterOperation(BaseModel):
             f"[a0out][1aa]amix[outa]"
         )
 
-        subprocess.run(
-            [
-                "ffmpeg", "-y",
-                "-i", str(input_path),
-                "-itsoffset", str(gta_offset),
-                "-i", str(filter_video),
-                "-filter_complex", filter_complex,
-                "-map", "[outv]",
-                "-map", "[outa]",
+        return FFmpegInvocation(
+            command=[
+                "ffmpeg",
+                "-y",
+                "-i",
+                str(input_path),
+                "-itsoffset",
+                str(gta_offset),
+                "-i",
+                str(filter_video),
+                "-filter_complex",
+                filter_complex,
+                "-map",
+                "[outv]",
+                "-map",
+                "[outa]",
                 str(output_path),
             ],
-            check=True,
+            output_path=output_path,
         )

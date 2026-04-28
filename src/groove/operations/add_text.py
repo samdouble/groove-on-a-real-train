@@ -1,10 +1,12 @@
 import re
-import subprocess
 from pathlib import Path
 from typing import Literal
 from uuid import uuid4
 
 from pydantic import BaseModel, Field, field_validator, model_validator
+
+from groove.ffmpeg_command_builder import FFmpegCommandBuilder
+from groove.ffmpeg_runtime import FFmpegInvocation
 
 
 def _escape_filter_path(p: Path) -> str:
@@ -99,7 +101,7 @@ class AddTextOperation(BaseModel):
             raise ValueError(msg)
         return self
 
-    def run(self, output_dir: Path) -> Path:
+    def build_invocation(self, output_dir: Path) -> FFmpegInvocation:
         input_path = Path(self.input)
         if not input_path.exists():
             raise FileNotFoundError(f"Input file not found: {input_path}")
@@ -132,24 +134,18 @@ class AddTextOperation(BaseModel):
             drawtext_opts.append(f"alpha={alpha_expr}")
         ff = "drawtext=" + ":".join(drawtext_opts)
 
-        subprocess.run(
-            [
-                "ffmpeg",
-                "-y",
-                "-i",
-                str(input_path),
-                "-vf",
-                ff,
-                "-c:v",
-                "libx264",
-                "-pix_fmt",
-                "yuv420p",
-                "-c:a",
-                "copy",
-                str(output_path),
-            ],
-            check=True,
+        command = (
+            FFmpegCommandBuilder()
+            .add_input(input_path)
+            .set_video_filter(ff)
+            .set_video_codec("libx264")
+            .set_pixel_format("yuv420p")
+            .set_audio_codec("copy")
+            .set_output(output_path)
+            .build()
         )
-        textfile_path.unlink(missing_ok=True)
-        print(f"[{self.id}] Done → {output_path.name}")
-        return output_path
+        return FFmpegInvocation(
+            command=command,
+            output_path=output_path,
+            cleanup_paths=[textfile_path],
+        )

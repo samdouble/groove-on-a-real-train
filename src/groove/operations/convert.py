@@ -2,8 +2,9 @@ from pathlib import Path
 from typing import Literal
 from uuid import uuid4
 
-import ffmpeg
 from pydantic import BaseModel, Field
+
+from groove.ffmpeg_runtime import FFmpegInvocation
 
 
 class ConvertOperation(BaseModel):
@@ -15,23 +16,25 @@ class ConvertOperation(BaseModel):
     audio_bitrate: str = "192k"
     output: str | None = None
 
-    def run(self, output_dir: Path) -> Path:
+    def build_invocation(self, output_dir: Path) -> FFmpegInvocation:
         input_path = Path(self.input)
         if not input_path.exists():
             raise FileNotFoundError(f"Input file not found: {input_path}")
         output_path = output_dir / input_path.with_suffix(f".{self.output_format}").name
         label = self.name or input_path.name
         print(f"[{self.id}] Converting: {label} -> {output_path.name}")
-        (
-            ffmpeg.input(str(input_path))
-            .output(
+        return FFmpegInvocation(
+            command=[
+                "ffmpeg",
+                "-y",
+                "-i",
+                str(input_path),
+                "-vn",
+                "-f",
+                self.output_format,
+                "-b:a",
+                self.audio_bitrate,
                 str(output_path),
-                format=self.output_format,
-                **{"b:a": self.audio_bitrate},
-                vn=None,
-            )
-            .overwrite_output()
-            .run()
+            ],
+            output_path=output_path,
         )
-        print(f"[{self.id}] Done.")
-        return output_path

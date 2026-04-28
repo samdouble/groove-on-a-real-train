@@ -11,8 +11,9 @@ steps:
         input: "/output/fail.mp4"
         output_format: "mp3"
         output: "Romanza Larghetto.mp3"
-      - type: "add_text"
+      - id: "Title card"
         name: "Title card"
+        type: "add_text"
         input: "/output/fail.mp4"
         text: "Hello"
         # Bundled font (COPY src/ in the image); use DejaVu instead: /usr/share/fonts/truetype/dejavu/DejaVuSans.ttf
@@ -26,3 +27,9 @@ steps:
         fontsize: 42
         fontcolor: "yellow"
         output: "fail-titled.mp4"
+      - type: "concatenate"
+        name: "Concatenate"
+        inputs:
+          - "/output/sound.mp4"
+          - { id: "Title card" }
+        output: "fail-titled-concat.mp4"

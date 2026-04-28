@@ -2,7 +2,6 @@ from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
-from pytest_mock import MockerFixture
 
 from groove.operations.cut import CutOperation, _parse_timestamp
 
@@ -61,91 +60,66 @@ class TestCutOperationRun:
     def test_raises_when_input_file_missing(self, tmp_path: Path) -> None:
         op = CutOperation(type="cut", input="/nonexistent/file.mp4", start="0", end="10")
         with pytest.raises(FileNotFoundError, match="Input file not found"):
-            op.run(output_dir=tmp_path)
+            op.build_invocation(output_dir=tmp_path)
 
-    def test_run_calls_ffmpeg_with_correct_args(
-        self, mocker: MockerFixture, tmp_path: Path
-    ) -> None:
+    def test_build_invocation_calls_ffmpeg_with_correct_args(self, tmp_path: Path) -> None:
         input_file = tmp_path / "video.mp4"
         input_file.touch()
         output_dir = tmp_path / "out"
         output_dir.mkdir()
 
-        mock_stream = mocker.MagicMock()
-        mock_stream.output.return_value = mock_stream
-        mock_stream.overwrite_output.return_value = mock_stream
-        mocker.patch("groove.operations.cut.ffmpeg.input", return_value=mock_stream)
-
         op = CutOperation(type="cut", input=str(input_file), start="0", end="30")
-        result = op.run(output_dir=output_dir)
+        invocation = op.build_invocation(output_dir=output_dir)
 
-        assert result == output_dir / "video_cut.mp4"
-        mock_stream.output.assert_called_once_with(
+        assert invocation.output_path == output_dir / "video_cut.mp4"
+        assert invocation.command == [
+            "ffmpeg",
+            "-y",
+            "-ss",
+            "0.0",
+            "-t",
+            "30.0",
+            "-i",
+            str(input_file),
+            "-c",
+            "copy",
             str(output_dir / "video_cut.mp4"),
-            c="copy",
-        )
-        mock_stream.overwrite_output.assert_called_once()
-        mock_stream.run.assert_called_once()
+        ]
 
-    def test_output_filename_has_cut_suffix(
-        self, mocker: MockerFixture, tmp_path: Path
-    ) -> None:
+    def test_output_filename_has_cut_suffix(self, tmp_path: Path) -> None:
         input_file = tmp_path / "my_song.mp3"
         input_file.touch()
         output_dir = tmp_path / "out"
         output_dir.mkdir()
 
-        mock_stream = mocker.MagicMock()
-        mock_stream.output.return_value = mock_stream
-        mock_stream.overwrite_output.return_value = mock_stream
-        mocker.patch("groove.operations.cut.ffmpeg.input", return_value=mock_stream)
-
         op = CutOperation(type="cut", input=str(input_file), start="1:00", end="2:00")
-        op.run(output_dir=output_dir)
+        invocation = op.build_invocation(output_dir=output_dir)
 
-        call_args = mock_stream.output.call_args
-        assert call_args.args[0].endswith("my_song_cut.mp3")
+        assert invocation.command[-1].endswith("my_song_cut.mp3")
 
-    def test_ffmpeg_input_receives_ss_and_duration(
-        self, mocker: MockerFixture, tmp_path: Path
-    ) -> None:
+    def test_ffmpeg_invocation_receives_ss_and_duration(self, tmp_path: Path) -> None:
         input_file = tmp_path / "video.mp4"
         input_file.touch()
         output_dir = tmp_path / "out"
         output_dir.mkdir()
-
-        mock_stream = mocker.MagicMock()
-        mock_stream.output.return_value = mock_stream
-        mock_stream.overwrite_output.return_value = mock_stream
-        mock_ffmpeg_input = mocker.patch(
-            "groove.operations.cut.ffmpeg.input", return_value=mock_stream
-        )
 
         op = CutOperation(type="cut", input=str(input_file), start="1:00", end="1:30")
-        op.run(output_dir=output_dir)
+        invocation = op.build_invocation(output_dir=output_dir)
 
-        mock_ffmpeg_input.assert_called_once_with(str(input_file), ss=60.0, t=30.0)
+        assert invocation.command[2:6] == ["-ss", "60.0", "-t", "30.0"]
 
-    def test_run_uses_name_as_label_when_set(
-        self,
-        mocker: MockerFixture,
-        tmp_path: Path,
-        capsys: pytest.CaptureFixture[str],
+    def test_build_invocation_uses_name_as_label_when_set(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
     ) -> None:
         input_file = tmp_path / "video.mp4"
         input_file.touch()
         output_dir = tmp_path / "out"
         output_dir.mkdir()
-
-        mock_stream = mocker.MagicMock()
-        mock_stream.output.return_value = mock_stream
-        mock_stream.overwrite_output.return_value = mock_stream
-        mocker.patch("groove.operations.cut.ffmpeg.input", return_value=mock_stream)
 
         op = CutOperation(
             type="cut", input=str(input_file), start="0", end="10", name="Intro", id="test-id"
         )
-        op.run(output_dir=output_dir)
+        op.build_invocation(output_dir=output_dir)
 
         captured = capsys.readouterr()
         assert "Intro" in captured.out
