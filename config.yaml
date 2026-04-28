@@ -21,6 +21,8 @@ steps:
         y: "80"
         start: 1.0
         end: 4.5
+        fade_in: 0.5
+        fade_out: 0.5
         fontsize: 42
         fontcolor: "yellow"
         output: "fail-titled.mp4"

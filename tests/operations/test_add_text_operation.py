@@ -56,6 +56,16 @@ class TestAddTextOperationValidation:
                 end=1.0,
             )
 
+    def test_fade_values_non_negative(self, tmp_path: Path) -> None:
+        with pytest.raises(ValidationError):
+            _make_op(tmp_path, fade_in=-0.1)
+        with pytest.raises(ValidationError):
+            _make_op(tmp_path, fade_out=-0.1)
+
+    def test_total_fade_must_fit_in_time_window(self, tmp_path: Path) -> None:
+        with pytest.raises(ValidationError):
+            _make_op(tmp_path, start=1.0, end=2.0, fade_in=0.7, fade_out=0.5)
+
     def test_text_single_line(self, tmp_path: Path) -> None:
         op = _make_op(tmp_path, text="one line")
         assert op.text == "one line"
@@ -132,7 +142,24 @@ class TestAddTextOperationRun:
         assert "fontcolor=white" in vf
         assert "x=(w-text_w)/2" in vf
         assert "y=h*0.8" in vf
+        assert "alpha=" not in vf
         assert result == out / "v_addtext.mp4"
         captured = capsys.readouterr()
         assert "Clip" in captured.out
         assert "Hi" in captured.out
+
+    def test_run_ffmpeg_with_fade_adds_alpha(
+        self, mocker: MockerFixture, tmp_path: Path
+    ) -> None:
+        m_run = mocker.patch("groove.operations.add_text.subprocess.run")
+        v = tmp_path / "v.mp4"
+        v.touch()
+        out = tmp_path / "step_out"
+        out.mkdir()
+        op = _make_op(tmp_path, input=str(v), fade_in=0.5, fade_out=0.75)
+        op.run(output_dir=out)
+
+        call = m_run.call_args[0][0]
+        vf = call[call.index("-vf") + 1]
+        assert "alpha=" in vf
+        assert "enable=between(t\\,1.0\\,3.0)" in vf

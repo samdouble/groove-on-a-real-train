@@ -1,9 +1,9 @@
+[![CI](https://github.com/samdouble/groove-on-a-real-train/actions/workflows/checks.yml/badge.svg)](https://github.com/samdouble/groove-on-a-real-train/actions/workflows/checks.yml)
+[![Coverage Status](https://coveralls.io/repos/samdouble/groove-on-a-real-train/badge.svg?branch=master&service=github)](https://coveralls.io/github/samdouble/groove-on-a-real-train?branch=master)
+
 # Groove on a Real Train
 
 FFmpeg is a great tool for video and audio processing, but its command-line interface can be daunting if you're aiming to do non-tri
-
-[![CI](https://github.com/samdouble/groove-on-a-real-train/actions/workflows/checks.yml/badge.svg)](https://github.com/samdouble/groove-on-a-real-train/actions/workflows/checks.yml)
-[![Coverage Status](https://coveralls.io/repos/samdouble/groove-on-a-real-train/badge.svg?branch=master&service=github)](https://coveralls.io/github/samdouble/groove-on-a-real-train?branch=master)
 
 [![Python](https://img.shields.io/badge/Python-3776AB?logo=python&logoColor=fff)](https://www.python.org/)
 [![uv](https://img.shields.io/badge/uv-261230.svg?logo=uv&logoColor=#de5fe9)](https://docs.astral.sh/uv/)
@@ -20,6 +20,24 @@ docker compose up --build
 ### Configuration
 
 #### Operations
+
+##### Add text
+
+```yaml
+- type: "add_text"
+  input: "/output/somevideo.mp4"
+  text: "Hello"
+  fontfile: "/app/src/assets/fonts/Michland Script.otf"
+  x: "(w-text_w)/2"
+  y: "80"
+  start: 1.0
+  end: 4.5
+  fade_in: 0.5
+  fade_out: 0.5
+  fontsize: 42
+  fontcolor: "yellow"
+  output: "somevideo-titled.mp4"
+```
 
 ##### Convert
 
